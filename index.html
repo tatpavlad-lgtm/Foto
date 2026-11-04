@@ -7,7 +7,7 @@
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDUacZx9uUYJnzcZ6X0crzTpIGooAdeVrY",
@@ -22,54 +22,49 @@
         const db = getFirestore(app);
         const messagesCollection = collection(db, "messages");
 
-        window.onload = function() {
+        window.onload = async function() {
             const messagesEl = document.getElementById('messages');
             const messageInput = document.getElementById('messageInput');
             const sendBtn = document.getElementById('sendBtn');
 
-            // 1. Слушаем базу и выводим сообщения
-            const q = query(messagesCollection, orderBy("createdAt", "asc")); // Сортируем по времени
-            
-            onSnapshot(q, (snapshot) => {
-                messagesEl.innerHTML = ''; // Очищаем экран перед обновлением
-                
-                if (snapshot.empty) {
+            // 1. Загружаем историю при открытии
+            try {
+                const querySnapshot = await getDocs(messagesCollection);
+                messagesEl.innerHTML = '';
+                if (querySnapshot.empty) {
                     messagesEl.innerHTML = '<div style="color:#8888a0; text-align:center; margin-top:20px;">Напиши первое сообщение...</div>';
-                    return;
+                } else {
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        const div = document.createElement('div');
+                        // Если сообщение от меня - справа, если от друга - слева
+                        div.className = (data.sender === "me") ? 'message mine' : 'message theirs';
+                        div.textContent = data.text;
+                        messagesEl.appendChild(div);
+                    });
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
                 }
-
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    const div = document.createElement('div');
-                    
-                    // Твои сообщения (sender: "me") справа, друга — слева
-                    div.className = (data.sender === "me") ? 'message mine' : 'message theirs';
-                    div.textContent = data.text;
-                    messagesEl.appendChild(div);
-                });
-                
-                // Автоматически прокручиваем вниз
-                messagesEl.scrollTop = messagesEl.scrollHeight;
-            });
+            } catch (e) {
+                alert("Ошибка загрузки: " + e.message);
+            }
 
             // 2. Отправка сообщения
             sendBtn.addEventListener('click', async () => {
                 const text = messageInput.value.trim();
                 if (!text) return;
                 
-                messageInput.value = ''; // Очищаем поле сразу
-                
                 try {
                     await addDoc(messagesCollection, {
                         text: text,
-                        sender: "me", // Твой ID
-                        createdAt: new Date() // Записываем точное время
+                        sender: "me" // Твой ID
                     });
+                    messageInput.value = '';
+                    window.location.reload(); // Перезагружаем, чтобы сообщение появилось
                 } catch (e) {
-                    alert("Ошибка: " + e.message);
+                    alert("Ошибка отправки: " + e.message);
                 }
             });
-            
+
             // Отправка по Enter
             messageInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
@@ -87,8 +82,7 @@
         
         .messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
         
-        .message { padding: 10px 15px; border-radius: 16px; max-width: 80%; font-size: 15px; word-wrap: break-word; animation: fadeIn 0.3s ease; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .message { padding: 10px 15px; border-radius: 16px; max-width: 80%; font-size: 15px; word-wrap: break-word; }
         
         /* Твои сообщения */
         .message.mine { background: #6c5ce7; align-self: flex-end; border-bottom-right-radius: 4px; }
@@ -98,7 +92,7 @@
         
         .input-area { padding: 15px; background: #1a1a22; display: flex; gap: 10px; flex-shrink: 0; padding-bottom: max(15px, env(safe-area-inset-bottom)); }
         
-        textarea { flex: 1; padding: 12px; border-radius: 20px; border: none; background: #252530; color: white; resize: none; outline: none; font-family: inherit; }
+        textarea { flex: 1; padding: 12px; border-radius: 20px; border: none; background: #252530; color: white; resize: none; outline: none; font-family: inherit; font-size: 15px;}
         
         button { padding: 12px 20px; border: none; border-radius: 20px; background: #6c5ce7; color: white; font-weight: bold; cursor: pointer; }
     </style>
