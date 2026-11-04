@@ -7,7 +7,7 @@
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDUacZx9uUYJnzcZ6X0crzTpIGooAdeVrY",
@@ -22,43 +22,58 @@
         const db = getFirestore(app);
         const messagesCollection = collection(db, "messages");
 
-        // Когда страница загрузится, начинаем слушать базу
         window.onload = function() {
             const messagesEl = document.getElementById('messages');
             const messageInput = document.getElementById('messageInput');
             const sendBtn = document.getElementById('sendBtn');
 
-            // 1. Слушаем базу и рисуем сообщения
-            onSnapshot(messagesCollection, (snapshot) => {
-                messagesEl.innerHTML = ''; // Очищаем экран
+            // 1. Слушаем базу и выводим сообщения
+            const q = query(messagesCollection, orderBy("createdAt", "asc")); // Сортируем по времени
+            
+            onSnapshot(q, (snapshot) => {
+                messagesEl.innerHTML = ''; // Очищаем экран перед обновлением
+                
                 if (snapshot.empty) {
                     messagesEl.innerHTML = '<div style="color:#8888a0; text-align:center; margin-top:20px;">Напиши первое сообщение...</div>';
                     return;
                 }
+
                 snapshot.forEach((doc) => {
+                    const data = doc.data();
                     const div = document.createElement('div');
-                    div.className = 'message';
-                    div.textContent = doc.data().text;
+                    
+                    // Твои сообщения (sender: "me") справа, друга — слева
+                    div.className = (data.sender === "me") ? 'message mine' : 'message theirs';
+                    div.textContent = data.text;
                     messagesEl.appendChild(div);
                 });
+                
+                // Автоматически прокручиваем вниз
                 messagesEl.scrollTop = messagesEl.scrollHeight;
-            }, (error) => {
-                alert("Ошибка чтения базы: " + error.message);
             });
 
-            // 2. Отправка при клике
+            // 2. Отправка сообщения
             sendBtn.addEventListener('click', async () => {
                 const text = messageInput.value.trim();
                 if (!text) return;
                 
+                messageInput.value = ''; // Очищаем поле сразу
+                
                 try {
                     await addDoc(messagesCollection, {
                         text: text,
-                        sender: "me"
+                        sender: "me", // Твой ID
+                        createdAt: new Date() // Записываем точное время
                     });
-                    messageInput.value = ''; // Очищаем поле только если отправка прошла успешно
                 } catch (e) {
-                    alert("Ошибка отправки: " + e.message);
+                    alert("Ошибка: " + e.message);
+                }
+            });
+            
+            // Отправка по Enter
+            messageInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendBtn.click();
                 }
             });
         };
@@ -66,12 +81,25 @@
 
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: sans-serif; background: #0f0f13; color: white; height: 100vh; display: flex; flex-direction: column; }
-        .header { background: #1a1a22; padding: 15px; text-align: center; font-weight: bold; border-bottom: 1px solid #2a2a38; }
-        .messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-        .message { background: #6c5ce7; padding: 10px 15px; border-radius: 16px; align-self: flex-end; max-width: 80%; font-size: 15px; word-wrap: break-word; }
-        .input-area { padding: 15px; background: #1a1a22; display: flex; gap: 10px; }
+        body { font-family: sans-serif; background: #0f0f13; color: white; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        .header { background: #1a1a22; padding: 15px; text-align: center; font-weight: bold; border-bottom: 1px solid #2a2a38; flex-shrink: 0;}
+        
+        .messages { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; scroll-behavior: smooth; }
+        
+        .message { padding: 10px 15px; border-radius: 16px; max-width: 80%; font-size: 15px; word-wrap: break-word; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Твои сообщения */
+        .message.mine { background: #6c5ce7; align-self: flex-end; border-bottom-right-radius: 4px; }
+        
+        /* Сообщения друга */
+        .message.theirs { background: #2d2d3a; align-self: flex-start; border-bottom-left-radius: 4px; }
+        
+        .input-area { padding: 15px; background: #1a1a22; display: flex; gap: 10px; flex-shrink: 0; padding-bottom: max(15px, env(safe-area-inset-bottom)); }
+        
         textarea { flex: 1; padding: 12px; border-radius: 20px; border: none; background: #252530; color: white; resize: none; outline: none; font-family: inherit; }
+        
         button { padding: 12px 20px; border: none; border-radius: 20px; background: #6c5ce7; color: white; font-weight: bold; cursor: pointer; }
     </style>
 </head>
@@ -79,7 +107,7 @@
     <div class="header">Neon Chat</div>
     <div class="messages" id="messages"></div>
     <div class="input-area">
-        <textarea id="messageInput" placeholder="Текст..." rows="1"></textarea>
+        <textarea id="messageInput" placeholder="Сообщение..." rows="1"></textarea>
         <button id="sendBtn">Отправить</button>
     </div>
 </body>
