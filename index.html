@@ -28,8 +28,9 @@
                     text: text,
                     sender: "me"
                 });
+                alert("УСПЕХ! Сообщение отправлено в базу!");
             } catch (e) {
-                alert("Ошибка отправки: " + e.message);
+                alert("ОШИБКА ОТПРАВКИ: " + e.message);
             }
         };
 
@@ -41,7 +42,7 @@
                 });
                 callback(allMessages);
             }, (error) => {
-                alert("Ошибка чтения: " + error.message);
+                alert("ОШИБКА ЧТЕНИЯ: " + error.message);
             });
         };
     </script>
@@ -72,7 +73,6 @@
         const messageInput = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendBtn');
 
-        // Слушаем базу
         if (window.listenToMessages) {
             window.listenToMessages((allMessages) => {
                 messagesEl.innerHTML = ''; 
@@ -90,7 +90,6 @@
             });
         }
 
-        // Отправка
         sendBtn.addEventListener('click', () => {
             const text = messageInput.value.trim();
             if (text && window.sendMsgToDB) {
@@ -99,7 +98,6 @@
             }
         });
         
-        // Отправка по Enter
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 sendBtn.click();
