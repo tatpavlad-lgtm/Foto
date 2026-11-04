@@ -22,28 +22,44 @@
         const db = getFirestore(app);
         const messagesCollection = collection(db, "messages");
 
-        // Отправка
-        window.sendMsgToDB = async function(text) {
-            try {
-                await addDoc(messagesCollection, {
-                    text: text,
-                    sender: "me"
-                });
-            } catch (e) {
-                alert("Ошибка отправки: " + e.message);
-            }
-        };
+        // Когда страница загрузится, начинаем слушать базу
+        window.onload = function() {
+            const messagesEl = document.getElementById('messages');
+            const messageInput = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
 
-        // Слушаем базу (тут магия, которая рисует сообщения)
-        window.listenToMessages = function(callback) {
+            // 1. Слушаем базу и рисуем сообщения
             onSnapshot(messagesCollection, (snapshot) => {
-                const allMessages = [];
+                messagesEl.innerHTML = ''; // Очищаем экран
+                if (snapshot.empty) {
+                    messagesEl.innerHTML = '<div style="color:#8888a0; text-align:center; margin-top:20px;">Напиши первое сообщение...</div>';
+                    return;
+                }
                 snapshot.forEach((doc) => {
-                    allMessages.push(doc.data().text);
+                    const div = document.createElement('div');
+                    div.className = 'message';
+                    div.textContent = doc.data().text;
+                    messagesEl.appendChild(div);
                 });
-                callback(allMessages);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
             }, (error) => {
-                alert("Ошибка чтения: " + error.message);
+                alert("Ошибка чтения базы: " + error.message);
+            });
+
+            // 2. Отправка при клике
+            sendBtn.addEventListener('click', async () => {
+                const text = messageInput.value.trim();
+                if (!text) return;
+                
+                try {
+                    await addDoc(messagesCollection, {
+                        text: text,
+                        sender: "me"
+                    });
+                    messageInput.value = ''; // Очищаем поле только если отправка прошла успешно
+                } catch (e) {
+                    alert("Ошибка отправки: " + e.message);
+                }
             });
         };
     </script>
@@ -61,52 +77,10 @@
 </head>
 <body>
     <div class="header">Neon Chat</div>
-    <div class="messages" id="messages">
-        <div style="color:#8888a0; text-align:center; margin-top:20px;">Напиши первое сообщение...</div>
-    </div>
+    <div class="messages" id="messages"></div>
     <div class="input-area">
         <textarea id="messageInput" placeholder="Текст..." rows="1"></textarea>
         <button id="sendBtn">Отправить</button>
     </div>
-
-    <script>
-        const messagesEl = document.getElementById('messages');
-        const messageInput = document.getElementById('messageInput');
-        const sendBtn = document.getElementById('sendBtn');
-
-        // Включаем отрисовку сообщений
-        if (window.listenToMessages) {
-            window.listenToMessages((allMessages) => {
-                messagesEl.innerHTML = ''; 
-                if (allMessages.length === 0) {
-                    messagesEl.innerHTML = '<div style="color:#8888a0; text-align:center; margin-top:20px;">Напиши первое сообщение...</div>';
-                    return;
-                }
-                allMessages.forEach(msgText => {
-                    const div = document.createElement('div');
-                    div.className = 'message';
-                    div.textContent = msgText;
-                    messagesEl.appendChild(div);
-                });
-                messagesEl.scrollTop = messagesEl.scrollHeight;
-            });
-        }
-
-        // Отправка по кнопке
-        sendBtn.addEventListener('click', () => {
-            const text = messageInput.value.trim();
-            if (text && window.sendMsgToDB) {
-                window.sendMsgToDB(text);
-                messageInput.value = '';
-            }
-        });
-        
-        // Отправка по Enter
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendBtn.click();
-            }
-        });
-    </script>
 </body>
 </html>
