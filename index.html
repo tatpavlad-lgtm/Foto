@@ -22,13 +22,19 @@
         const db = getFirestore(app);
         const messagesCollection = collection(db, "messages");
 
+        // Генерируем уникальный ID для этого устройства и сохраняем в браузере
+        let myId = localStorage.getItem('myChatId');
+        if (!myId) {
+            myId = "user_" + Math.floor(Math.random() * 1000000); // Случайное число
+            localStorage.setItem('myChatId', myId);
+        }
+
         window.onload = async function() {
             const messagesEl = document.getElementById('messages');
             const messageInput = document.getElementById('messageInput');
             const sendBtn = document.getElementById('sendBtn');
 
             try {
-                // СОРТИРУЕМ ПО ВРЕМЕНИ (createdAt)
                 const q = query(messagesCollection, orderBy("createdAt", "asc"));
                 const querySnapshot = await getDocs(q);
                 messagesEl.innerHTML = '';
@@ -39,7 +45,14 @@
                     querySnapshot.forEach((doc) => {
                         const data = doc.data();
                         const div = document.createElement('div');
-                        div.className = (data.sender === "me") ? 'message mine' : 'message theirs';
+                        
+                        // ГЛАВНАЯ МАГИЯ: Если ID совпадает с нашим — это наше сообщение
+                        if (data.senderId === myId) {
+                            div.className = 'message mine';
+                        } else {
+                            div.className = 'message theirs';
+                        }
+                        
                         div.textContent = data.text;
                         messagesEl.appendChild(div);
                     });
@@ -57,11 +70,10 @@
                 if (!text) return;
                 
                 try {
-                    // ДОБАВЛЯЕМ ВРЕМЯ ОТПРАВКИ
                     await addDoc(messagesCollection, { 
                         text: text, 
-                        sender: "me",
-                        createdAt: new Date() // Точное время
+                        senderId: myId, // Отправляем наш уникальный ID
+                        createdAt: new Date() 
                     });
                     messageInput.value = '';
                     window.location.reload(); 
