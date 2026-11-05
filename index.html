@@ -7,7 +7,7 @@
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDUacZx9uUYJnzcZ6X0crzTpIGooAdeVrY",
@@ -22,61 +22,79 @@
         const db = getFirestore(app);
         const messagesCollection = collection(db, "messages");
 
-        // Генерируем уникальный ID для этого устройства и сохраняем в браузере
+        // Генерируем уникальный ID для этого устройства
         let myId = localStorage.getItem('myChatId');
         if (!myId) {
-            myId = "user_" + Math.floor(Math.random() * 1000000); // Случайное число
+            myId = "user_" + Math.floor(Math.random() * 1000000);
             localStorage.setItem('myChatId', myId);
         }
 
-        window.onload = async function() {
+        // Просим разрешение на уведомления
+        if ("Notification" in window) {
+            Notification.requestPermission();
+        }
+
+        window.onload = function() {
             const messagesEl = document.getElementById('messages');
             const messageInput = document.getElementById('messageInput');
             const sendBtn = document.getElementById('sendBtn');
+            let isFirstLoad = true; // Чтобы не уведомлять о старых сообщениях при загрузке
 
-            try {
-                const q = query(messagesCollection, orderBy("createdAt", "asc"));
-                const querySnapshot = await getDocs(q);
-                messagesEl.innerHTML = '';
+            // Слушаем базу в реальном времени (без перезагрузки!)
+            const q = query(messagesCollection, orderBy("createdAt", "asc"));
+            onSnapshot(q, (snapshot) => {
+                messagesEl.innerHTML = ''; 
                 
-                if (querySnapshot.empty) {
+                if (snapshot.empty) {
                     messagesEl.innerHTML = '<div style="color:#8888a0; text-align:center; margin-top:20px;">Напиши первое сообщение...</div>';
                 } else {
-                    querySnapshot.forEach((doc) => {
+                    snapshot.forEach((doc) => {
                         const data = doc.data();
                         const div = document.createElement('div');
-                        
-                        // ГЛАВНАЯ МАГИЯ: Если ID совпадает с нашим — это наше сообщение
-                        if (data.senderId === myId) {
-                            div.className = 'message mine';
-                        } else {
-                            div.className = 'message theirs';
-                        }
-                        
+                        div.className = (data.senderId === myId) ? 'message mine' : 'message theirs';
                         div.textContent = data.text;
                         messagesEl.appendChild(div);
                     });
                     
-                    setTimeout(() => {
-                        messagesEl.scrollTop = messagesEl.scrollHeight;
-                    }, 50);
+                    // Прокручиваем вниз
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+                    // Если это не первая загрузка, и последнее сообщение не от нас — показываем уведомление
+                    if (!isFirstLoad) {
+                        const lastDoc = snapshot.docs[snapshot.docs.length - 1];
+                        if (lastDoc && lastDoc.data().senderId !== myId) {
+                            // Всплывающее окно
+                            if (Notification.permission === "granted") {
+                                new Notification("Neon Chat", { body: "Новое сообщение: " + lastDoc.data().text });
+                            }
+                            // Звук (используем встроенный аудио-буфер, чтобы не искать файлы)
+                            try {
+                                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                                const oscillator = audioCtx.createOscillator();
+                                oscillator.type = 'sine';
+                                oscillator.frequency.value = 800;
+                                oscillator.connect(audioCtx.destination);
+                                oscillator.start();
+                                oscillator.stop(audioCtx.currentTime + 0.1);
+                            } catch(e) {}
+                        }
+                    }
+                    isFirstLoad = false; 
                 }
-            } catch (e) {
-                alert("Ошибка загрузки: " + e.message);
-            }
+            });
 
             sendBtn.addEventListener('click', async () => {
                 const text = messageInput.value.trim();
                 if (!text) return;
                 
+                messageInput.value = '';
+                
                 try {
                     await addDoc(messagesCollection, { 
                         text: text, 
-                        senderId: myId, // Отправляем наш уникальный ID
+                        senderId: myId, 
                         createdAt: new Date() 
                     });
-                    messageInput.value = '';
-                    window.location.reload(); 
                 } catch (e) {
                     alert("Ошибка отправки: " + e.message);
                 }
